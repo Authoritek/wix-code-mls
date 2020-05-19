@@ -1,0 +1,514 @@
+import wixData from "wix-data";
+import { session } from "wix-storage";
+
+let firstLoad = true;
+let lastFilterTitle = "";
+let debounceTimer;
+let onlyAgent = false;
+let existingFilter = null;
+let onlyOffice = false;
+let filteringBy = "city";
+let minPrice = 0;
+let maxPrice = 10000000;
+let minBeds = 0;
+let maxBeds = 7;
+let garageFilter = "Yes";
+let onlyOneState = "";
+let checkCategory = false;
+let minBaths = 0;
+let maxBaths = 7;
+let lotDimensionMin = 0;
+let lotDimensionMax = 20000;
+let lotDimensionMinAcres = 0;
+let lotDimensionMaxAcres = 25;
+let minStories = 0;
+let yearMin = 1900;
+let yearMax = 2019;
+let sortType = "priceHigh";
+let ascend = false;
+let zipCode = "";
+let category = "NONE";
+let schoolDistrict = "";
+let city = "";
+let moreBed = false;
+let moreBath = false;
+let lotdesc = "course";
+let golfHOA = false;
+let golfAmmen = false;
+let sortval = null
+let acresChecked = false;
+let squareChecked = false;
+let checkBed = false;
+let checkBath = false;
+let newSort = wixData.sort();
+
+
+function isSet(item) {
+	if (item !== "" && item !== null && item !== undefined) {
+		return true;
+	}
+	return false;
+}
+
+$w.onReady(() => {
+	loadRepeater();
+	lastFilterTitle = session.getItem("homeSearch");
+	
+	if (!isSet(lastFilterTitle)) {
+		lastFilterTitle = "";
+	}
+	$w("#searchVal").value = lastFilterTitle;
+	let sort = session.getItem("sortType");
+	if (isSet(sort)) {
+		sortval = sort;
+		$w("#sortByFeatures").value = sort;
+		sortData();
+	}
+
+	let searchBy = session.getItem("searchBy");
+	if (isSet(searchBy)) {
+		filteringBy = searchBy;
+		$w("#contentID").value = searchBy;
+	}
+
+	let bedMin = parseInt(session.getItem("minBed"),10);
+	if (isSet(bedMin) && !isNaN(bedMin)) {
+		minBeds = bedMin;
+		$w("#minBeds").value = minBeds;
+	}
+
+	let bedMax = parseInt(session.getItem("maxBed"),10);
+	if (isSet(bedMax) && !isNaN(bedMax)) {
+		maxBeds = bedMax;
+		$w("#maxBeds").value = maxBeds;
+	}
+
+	let bathMin = parseInt(session.getItem("minBath"),10);
+	if (isSet(bathMin) && !isNaN(bathMin)) {
+		minBaths = bathMin;
+		$w("#minBaths").value = bathMin;
+	}
+
+	let bathMax = parseInt(session.getItem("maxBath"),10);
+	if (isSet(bathMax) && !isNaN(bathMax)) {
+		maxBaths = bathMax;
+		$w("#maxBaths").value = bathMax;
+	}
+
+	let acresMin = parseFloat(session.getItem("minAcres"),10.0);
+	if (isSet(acresMin) && !isNaN(acresMin)) {
+		lotDimensionMinAcres = acresMin;
+		$w("#acres").value = acresMin;
+	}
+
+	let acresMax = parseFloat(session.getItem("maxAcres"),10.0);
+	if (isSet(acresMax) && !isNaN(acresMax)) {
+		lotDimensionMaxAcres = acresMax;
+		$w("#acreMax").value = acresMax;
+	}
+
+	let priceMin = parseInt(session.getItem("minPrice"),10);
+	if (isSet(priceMin) && !isNaN(priceMin)) {
+		minPrice = priceMin;
+		$w("#priceMinimum").value = priceMin;
+	}
+
+	let priceMax = parseInt(session.getItem("maxPrice"),10);
+	if (isSet(priceMax) && !isNaN(priceMax)) {
+		maxPrice = priceMax;
+		$w("#priceMaximum").value = priceMax;
+		console.log("price max: " + priceMax);
+	}
+
+	let zip = session.getItem("zip");
+	if (isSet(zip)) {
+		zipCode = zip;
+		$w("#zipCode").value = zip;
+	}
+
+	let golfOpt = session.getItem("golfOptions");
+	console.log("golfopt" + golfOpt);
+	if (isSet(golfOpt)) {
+		checkCategory = true;
+		lotdesc = golfOpt;
+		$w("#lotdescription").value = golfOpt;
+	}
+
+	let golfAm = session.getItem("golfAmen");
+	console.log("golfAm" + golfAm);
+	if (isSet(golfAm) && golfAm === "true") {
+		golfAmmen = true;
+		$w("#checkbox1").checked = true;
+	}
+
+	let hgolf = session.getItem("hoaGolf");
+	console.log("golfhoa" + hgolf);
+	if (isSet(hgolf) && hgolf === "true") {
+		golfHOA = true;
+		$w("#checkbox2").checked = true;
+	}
+
+	onlyOneState = session.getItem("oneStateOnly");
+	if (onlyOneState === "Kansas") {
+		$w("#onlyKansas").checked = true;
+		console.log("kans");
+	}
+	if (onlyOneState === "Missouri") {
+		$w("#onlyMissouri").checked = true;
+		console.log("mis");
+	}
+
+	$w("#loader").show();
+	filter();
+})
+
+
+
+function loadRepeater() {
+
+	$w("#propertyData").onItemReady(($item, itemData, index) => {
+		$item("#requestShowing").link = "/property-unique/" + itemData.mATRIXUNIQUEID;
+		$item("#viewMore").link = "/property-unique/" + itemData.mATRIXUNIQUEID;
+		$item("#mainImage").link = "/property-unique/" + itemData.mATRIXUNIQUEID;
+		//$item("#stateName").text = itemData.sTATE;
+		//$item("#cityName").text = itemData.cITY;
+
+		$item("#streetName").text = itemData.sTREET + " " + itemData.sTREETTYPE;
+
+		//$item("#streetNumber").text = itemData.sTREETNUMBER;
+		if (isSet(itemData.rEMARKS)) {
+			let description = (itemData.rEMARKS);
+			if (description.length > 200) {
+			description = description.slice(0, 200) + "...";
+			$item('#descriptionText').text = description;
+		}
+		}else{
+			$item('#descriptionText').text = "No Description";
+		}
+		
+
+		
+
+		
+		//$item('#mainImage').src = itemData.mainImage;
+		if(isSet(itemData.pRICE)){
+			let price = numberWithCommas(itemData.pRICE);
+			$item('#priceText').text = price;
+		}else{
+			$item('#priceText').text = "Price Not Listed";
+		}
+		
+		/*
+		if (itemData.fULLBATHS !== null && itemData.fULLBATHS !== undefined && itemData.fULLBATHS !== "") {
+			$item("#bathText").text = (itemData.fULLBATHS).toString();
+		} else {
+			$item("#bathText").text = "Ø";
+		}
+		if (itemData.bEDROOMS !== null && itemData.bEDROOMS !== undefined && itemData.bEDROOMS !== "") {
+			$item("#bedText").text = (itemData.bEDROOMS).toString();
+		} else {
+			$item("#bedText").text = "Ø";
+		}*/
+		if(isSet(itemData.sQFT)){
+			$item("#dimensionText").text = numberWithCommas(itemData.sQFT);
+		}else{
+			$item("#dimensionText").text = "Not Listed";
+		}
+		
+	});
+
+}
+
+function numberWithCommas(x) {
+	return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
+function filter() {
+
+	let newFilter = wixData.filter();
+	console.log(filteringBy)
+	console.log(checkCategory)
+	console.log(lotdesc)
+	console.log(checkBed)
+	console.log(minBeds)
+	console.log(maxBeds)
+	console.log(checkBath)
+	console.log(minBaths)
+	console.log(maxBaths)
+	console.log(minPrice)
+	console.log(maxPrice)
+
+	//Setting the value to only display listings within the office or agnecy. Must change big value per site
+	//newFilter = newFilter.contains('lISTOFFICEID', "RAN 28"); 
+	console.log("filtr " + filteringBy);
+	if (lastFilterTitle !== null) {
+		if (filteringBy === "district") {
+			newFilter = newFilter.contains('sCHOOLDISTRICT', lastFilterTitle);
+		} else if (filteringBy === "city") {
+			console.log("filtering by city?" + lastFilterTitle);
+			newFilter = newFilter.contains('cITY', lastFilterTitle);
+		}
+	}
+
+	newFilter = newFilter.isNotEmpty('mainImage');
+	newFilter = newFilter.contains('sTATUS', "Active");
+
+	//category
+	if (checkCategory) {
+		if (lotdesc === "0") {
+			newFilter = newFilter.contains("lOTDESCRIPTION", "course");
+		} else if (lotdesc === "1") {
+			newFilter = newFilter.contains("lOTDESCRIPTION", "green");
+		} else if (lotdesc === "2") {
+			newFilter = newFilter.contains("lOTDESCRIPTION", "fairway");
+		}
+	}
+
+	//Giving constraints to the number of beds both [min] and [max]
+	if (checkBed) { newFilter = newFilter.between("bEDROOMS", minBeds, maxBeds); }
+	checkBed = false;
+	//Giving constraints to the number of baths both [min] and [max]
+	if (checkBath) { newFilter = newFilter.between("fULLBATHS", minBaths, maxBaths); }
+	checkBath = false;
+	//Giving constraints to the price of the listing both [min] and [max]
+
+	newFilter = newFilter.between("pRICE", minPrice, maxPrice);
+	if (onlyOneState !== null) {
+		newFilter = newFilter.contains("sTATE", onlyOneState);
+	}
+	if (zipCode !== null) {
+		newFilter = newFilter.contains("zIP", zipCode);
+
+	}
+
+	//Giving constraints to the dimensions of the listing both [0] and [max]
+
+	if (acresChecked) { newFilter = newFilter.between("aCRES", lotDimensionMinAcres, lotDimensionMaxAcres); }
+
+	if (golfHOA) {
+		newFilter = newFilter.contains("hOADUESINCLUDE", "golf");
+	}
+
+	if (golfAmmen) { newFilter = newFilter.contains("aVAILABLEAMENITIES", "golf"); }
+
+	//actually setting the filter to the dataset and then re-loading our repeater
+	
+	/*
+	$w("#dataset3").setSort(newSort).then(() => {
+		$w('#loader').hide();
+
+		$w('#dataset3').setFilter(newFilter).then(() => {
+			loadRepeater();
+
+		}).catch((error) => {
+			console.log(error)
+		});
+
+	});
+	*/
+	let sortP = $w("#dataset3").setSort(newSort);
+    let filterP = $w('#dataset3').setFilter(newFilter);
+
+	Promise.all([sortP, filterP]).then(() => {
+        $w('#loader').hide();
+    }).catch((error) => {
+        console.log(error)
+    });
+
+	/*
+	Tried to implement this
+	let sortP = $w("#dataset3").setSort(newSort);
+    let filterP = $w('#dataset3').setFilter(newFilter);
+
+    return Promise.all(sortP, filterP).then(() => {
+        $w('#loader').hide();
+    }).catch((error) => {
+        console.log(error)
+    });*/
+
+}
+
+export function lotdescription_change(event) {
+	//Add your code for this event here: 
+	checkCategory = true;
+	lotdesc = $w("#lotdescription").value;
+	session.setItem("golfOptions", lotdesc);
+}
+
+function sortData() {
+
+	if (ascend) { newSort = newSort.ascending("highLow"); } else {}
+	if (sortval === "priceHigh") {
+		console.log("YEEEAH");
+		newSort = newSort.descending("pRICE");
+	} else if (sortval === "priceLow") {
+		newSort = newSort.ascending("pRICE");
+	} else if (sortval === "yearOld") {
+		newSort = newSort.ascending("yEARBUILT");
+	} else if (sortval === "yearNew") {
+		newSort = newSort.descending("yEARBUILT");
+	} else if (sortval === "sqftLarge") {
+		newSort = newSort.descending("sQFT");
+	} else if (sortval === "sqftSmall") {
+		newSort = newSort.ascending("sQFT");
+	} else if (sortval === "dateOld") {
+		newSort = newSort.ascending("dATEMODIFIED");
+	} else if (sortval === "dateNew") {
+		newSort = newSort.descending("dATEMODIFIED");
+	}
+
+	//setting the way we are going to sort
+
+}
+
+export function sortByFeatures_change(event) {
+	//Add your code for this event here: 
+	sortval = $w("#sortByFeatures").value;
+	session.setItem("sortType", sortval);
+	sortData();
+}
+
+export function checkbox1_change(event) {
+	//Add your code for this event here: 
+	golfAmmen = $w("#checkbox1").checked;
+	session.setItem("golfAmen", golfAmmen);
+}
+
+export function checkbox2_change(event) {
+	//Add your code for this event here: 
+	golfHOA = $w("#checkbox2").checked;
+	session.setItem("hoaGolf", golfHOA);
+	console.log("setting it: " + golfHOA);
+}
+
+export function searchVal_keyPress(event) {
+	//Add your code for this event here: 
+	if (debounceTimer) {
+		clearTimeout(debounceTimer);
+		debounceTimer = undefined;
+	}
+	debounceTimer = setTimeout(() => {
+		lastFilterTitle = $w('#searchVal').value;
+		console.log(filteringBy + " by");
+		session.setItem("homeSearch", lastFilterTitle);
+	}, 500);
+}
+
+export function contentID_change(event) {
+	//Add your code for this event here: 
+	filteringBy = $w('#contentID').value;
+	session.setItem("searchBy", filteringBy);
+}
+
+export function minBeds_change(event) {
+	//Add your code for this event here: 
+	checkBed = true;
+	minBeds = parseInt($w("#minBeds").value, 10);
+	session.setItem("minBed", minBeds);
+}
+
+export function maxBeds_change(event) {
+	//Add your code for this event here: 
+	checkBed = true;
+	maxBeds = parseInt($w("#maxBeds").value, 10);
+	session.setItem("maxBed", maxBeds);
+}
+
+export function minBaths_change(event) {
+	//Add your code for this event here: 
+	checkBath = true;
+	minBaths = parseInt($w("#minBaths").value, 10);
+	session.setItem("minBath", minBaths);
+}
+
+export function maxBaths_change(event) {
+	//Add your code for this event here:
+	checkBath = true;
+	maxBaths = parseInt($w("#maxBaths").value, 10);
+	session.setItem("maxBath", maxBaths);
+}
+
+export function priceMinimum_keyPress(event) {
+	//Add your code for this event here: 
+	if (debounceTimer) {
+		clearTimeout(debounceTimer);
+		debounceTimer = undefined;
+	}
+	debounceTimer = setTimeout(() => {
+		minPrice = parseInt($w("#priceMinimum").value, 10);
+		session.setItem("minPrice", minPrice);
+	}, 500);
+}
+
+export function priceMaximum_keyPress(event) {
+	//Add your code for this event here: 
+	if (debounceTimer) {
+		clearTimeout(debounceTimer);
+		debounceTimer = undefined;
+	}
+	debounceTimer = setTimeout(() => {
+		maxPrice = parseInt($w("#priceMaximum").value, 10);
+		session.setItem("maxPrice", maxPrice);
+	}, 500);
+}
+
+export function acres_keyPress(event) {
+	squareChecked = false;
+	acresChecked = true;
+	if (debounceTimer) {
+		clearTimeout(debounceTimer);
+		debounceTimer = undefined;
+	}
+	debounceTimer = setTimeout(() => {
+		lotDimensionMinAcres = parseInt($w("#acres").value, 10);
+		session.setItem("minAcres", lotDimensionMinAcres);
+	}, 500);
+	//Add your code for this event here: 
+}
+
+export function acreMax_keyPress(event) {
+	squareChecked = false;
+	acresChecked = true;
+	if (debounceTimer) {
+		clearTimeout(debounceTimer);
+		debounceTimer = undefined;
+	}
+	debounceTimer = setTimeout(() => {
+		lotDimensionMaxAcres = parseInt($w("#acreMax").value, 10);
+		session.setItem("maxAcres", lotDimensionMaxAcres);
+	}, 500);
+	//Add your code for this event here: 
+}
+
+export function performSearch_click(event) {
+	//Add your code for this event here: 
+	$w("#loader").show();
+	filter();
+}
+
+export function onlyKansas_click(event) {
+	//Add your code for this event here: 
+	onlyOneState = "Kansas";
+	$w("#onlyMissouri").checked = false;
+	session.setItem("oneStateOnly", onlyOneState);
+}
+
+export function onlyMissouri_click(event) {
+	//Add your code for this event here:
+	onlyOneState = "Missouri";
+	$w("#onlyKansas").checked = false;
+	session.setItem("oneStateOnly", onlyOneState);
+}
+
+export function zipCode_keyPress(event) {
+	//Add your code for this event here: 
+
+	if (debounceTimer) {
+		clearTimeout(debounceTimer);
+		debounceTimer = undefined;
+	}
+	debounceTimer = setTimeout(() => {
+		zipCode = parseInt($w("#zipCode").value, 10);
+		session.setItem("zip", zipCode);
+	}, 500);
+}
